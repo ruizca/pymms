@@ -28,9 +28,12 @@ def _add_redshift(model_str, **kwargs):
     return model_str
 
 
-def _add_energy_range(cmd_str, key, elo=0.5, ehi=2, **kwargs):
+def _add_energy_range(cmd_str, key, elo=0.5, ehi=2, unabsorbed=False, **kwargs):
     elo, ehi = kwargs.pop(key, (elo, ehi))
     cmd_str += f" {elo}-{ehi}"
+
+    if unabsorbed:
+        cmd_str += " unabsorbed"
 
     return cmd_str
 
@@ -64,14 +67,18 @@ def _parse_model_args(model, **kwargs):
 
 def _parse_from_args(**kwargs):
     from_str = "from flux ergs"
+    kwargs.pop("unabsorbed")
     return _add_energy_range(from_str, "input_energy_range", **kwargs)
 
 
 def _parse_mission_args(**kwargs):
     mission = kwargs.pop("mission", None)
+    unabsorbed = kwargs.pop("unabsorbed", False)
 
     if mission:
+        unabsorbed = False
         mission_str = f"inst {mission}"
+        
         for key in ["detector", "filter"]:
             try:
                 value = kwargs[key]
@@ -81,8 +88,10 @@ def _parse_mission_args(**kwargs):
                 raise ValueError(f"{key} missing for instrument {mission}!")
     else:
         mission_str = f"inst flux ergs"
-
-    return _add_energy_range(mission_str, "output_energy_range", **kwargs)
+    
+    return _add_energy_range(
+        mission_str, "output_energy_range", unabsorbed=unabsorbed, **kwargs
+    )
 
 
 def _make_script_file(file, *cmds):
@@ -107,7 +116,7 @@ def _parse_output(output):
                 result = float(line.split()[3])
             
             except ValueError:
-                result = float(line.split()[9])
+                result = float(line.split()[-2])
 
     return result
 
@@ -119,7 +128,7 @@ def pimms(flux, model="powerlaw", **kwargs):
     Parameters
     ----------
     flux : float
-        Flux of the source in ergs/s/cm2.
+        Observed flux of the source in ergs/s/cm2.
     model : str, optional
         Spectral model. The available models are: "powerlaw", 
         "cutoff_powerlaw", "blackbody", "bremss" and "plasma",
@@ -139,6 +148,11 @@ def pimms(flux, model="powerlaw", **kwargs):
         spectral response is applied to the simulation and the output is the
         model flux (in ergs/s/cm-2) for the selected output energy range. By
         default is None.
+    unabsorbed : bool, optional
+        If True, the output flux wil be the intrinsic, absorption-corrected 
+        value. This parameter is only taken into account if mission is None,
+        otherwise the output value is always the absorbed count rate. By
+        default is False.
     detector : str
         Detector used for the simulation. Mandatory if `mission` is not None.
         The actual accepted values depend on the selected mission. See the 
@@ -182,8 +196,8 @@ def pimms(flux, model="powerlaw", **kwargs):
     """
     cmd_list = (
         _parse_model_args(model, **kwargs),
-        _parse_from_args(**kwargs),
         _parse_mission_args(**kwargs),
+        _parse_from_args(**kwargs),
         f"go {flux}",
         "q",
     )
