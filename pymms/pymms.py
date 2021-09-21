@@ -67,7 +67,7 @@ def _parse_model_args(model, **kwargs):
 
 def _parse_from_args(**kwargs):
     from_str = "from flux ergs"
-    kwargs.pop("unabsorbed")
+    kwargs.pop("unabsorbed", False)
     return _add_energy_range(from_str, "input_energy_range", **kwargs)
 
 
